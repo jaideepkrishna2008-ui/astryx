@@ -57,6 +57,8 @@ import {
 import {
   borderlessSurfaces,
   indicatorLines,
+  pillDrawnRadios,
+  pillParts,
   selectedBoxes,
   dividerParts,
   drawsLine,
@@ -7598,7 +7600,7 @@ export function draftAnswer(ctx, env, question) {
         });
         const pills =
           r.dial === 'corners' && !c.parts.length ? pillsSquare(r.value) : null;
-        if (pills) steps.push(pills.step);
+        if (pills) steps.push(...pills.steps);
         const d = {
           text: `${r.dial} ${r.value}${ons[0] ? ` on ${ons.map(p => p?.on).join(', ')}` : ''}: the ${r.dial} dial set to ${r.value}, as set reads it${pills ? `, ${pills.said}` : ''}`,
           options: [steps],
@@ -9837,14 +9839,15 @@ export function draftAnswer(ctx, env, question) {
    * that token goes square too, and the answer names those parts. Null
    * unless the value is square and the question asks for it everywhere or
    * names a pill part.
+   * On a Core that draws a radio's circle with the pill token, the radio
+   * marks keep the token at Core's value (pillDrawnRadios).
    * @param {string} value
-   * @returns {{step: Step, said: string} | null}
+   * @returns {{steps: Step[], said: string} | null}
    */
   function pillsSquare(value) {
     if (!/^(?:square|none|0(?:px)?)$/.test(value)) return null;
-    const pills = Object.keys(C.MAP).filter(p =>
-      partReadsToken(p, '--radius-full'),
-    );
+    const pills = pillParts(C);
+    const radios = pillDrawnRadios(C);
     if (
       !pills.length ||
       !(
@@ -9857,9 +9860,13 @@ export function draftAnswer(ctx, env, question) {
       )
     )
       return null;
+    const round = String(TOKENS['--radius-full'] ?? '9999px');
     return {
-      step: set('--radius-full', '0px'),
-      said: `and --radius-full 0px for the parts drawn as pills (${pills.slice(0, 6).join(', ')}${pills.length > 6 ? ` and ${pills.length - 6} more` : ''})`,
+      steps: [
+        set('--radius-full', '0px'),
+        ...radios.map(m => set('--radius-full', round, {on: m})),
+      ],
+      said: `and --radius-full 0px for the parts drawn as pills (${pills.slice(0, 6).join(', ')}${pills.length > 6 ? ` and ${pills.length - 6} more` : ''})${radios.length ? `; the radio marks keep their circle (${radios.join(', ')})` : ''}`,
     };
   }
   /**
@@ -11454,7 +11461,7 @@ export function draftAnswer(ctx, env, question) {
           if (pills)
             return {
               text: `no rounding anywhere: the corners dial square, ${pills.said}`,
-              options: [[set('corners', dial), pills.step]],
+              options: [[set('corners', dial), ...pills.steps]],
               sequence: true,
             };
           return {
